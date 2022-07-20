@@ -9,7 +9,7 @@ from scipy.fftpack import dct
 
 from imagededup.handlers.search.retrieval import HashEval
 from imagededup.utils.general_utils import get_files_to_remove, save_json, parallelise
-from imagededup.utils.image_utils import load_image, preprocess_image, check_image_array_hash
+from imagededup.utils.image_utils import load_image, load_image_g_l2, load_image_g_l4, preprocess_image, check_image_array_hash
 from imagededup.utils.logger import return_logger
 
 logger = return_logger(__name__)
@@ -62,9 +62,7 @@ class Hashing:
         Returns:
             hamming_distance: Hamming distance between the two hashes.
         """
-        hash1_bin = bin(int(hash1, 16))[2:].zfill(
-            64
-        )  # zfill ensures that len of hash is 64 and pads MSB if it is < A
+        hash1_bin = bin(int(hash1, 16))[2:].zfill(64)  # zfill ensures that len of hash is 64 and pads MSB if it is < A
         hash2_bin = bin(int(hash2, 16))[2:].zfill(64)
         return np.sum([i != j for i, j in zip(hash1_bin, hash2_bin)])
 
@@ -106,21 +104,21 @@ class Hashing:
         try:
             if image_file and os.path.exists(image_file):
                 image_file = Path(image_file)
-                image_pp = load_image(
-                    image_file=image_file, target_size=self.target_size, grayscale=True
-                )
+                img = load_image(image_file=image_file, target_size=self.target_size, grayscale=False)
+                #img, img_t, img_b = load_image_g_l2(image_file=image_file, target_size=self.target_size, grayscale=False)
+                #img, img_tl, img_tr, img_bl, img_br = load_image_g_l4(image_file=image_file, target_size=self.target_size, grayscale=False)
 
             elif isinstance(image_array, np.ndarray):
                 check_image_array_hash(image_array)  # Do sanity checks on array
-                image_pp = preprocess_image(
-                    image=image_array, target_size=self.target_size, grayscale=True
-                )
+                img = preprocess_image(image=img, target_size=self.target_size, grayscale=True)
             else:
                 raise ValueError
         except (ValueError, TypeError):
             raise ValueError('Please provide either image file path or image array!')
 
-        return self._hash_func(image_pp) if isinstance(image_pp, np.ndarray) else None
+        return self._hash_func(img) if isinstance(img, np.ndarray) else None
+        #return self._hash_func_g_l2(img, img_t, img_b) if isinstance(img, np.ndarray) else None
+        #return self._hash_func_g_l4(img, img_tl, img_tr, img_bl, img_br) if isinstance(img, np.ndarray) else None
 
     def encode_images(self, image_dir=None):
         """
@@ -166,6 +164,33 @@ class Hashing:
     def _hash_func(self, image_array: np.ndarray):
         hash_mat = self._hash_algo(image_array)
         return self._array_to_hash(hash_mat)
+
+    def _hash_func_g_l2(self, img, img_t, img_b):
+        hash_mat = self._hash_algo(img)
+        hash_mat_t = self._hash_algo(img_t)
+        hash_mat_b = self._hash_algo(img_b)
+        hash_mat = ''.join('%0.2x' % x for x in np.packbits(hash_mat))
+        hash_mat_t = ''.join('%0.2x' % x for x in np.packbits(hash_mat_t))
+        hash_mat_b = ''.join('%0.2x' % x for x in np.packbits(hash_mat_b))
+        res = hash_mat + hash_mat_t + hash_mat_b
+
+        return res
+
+    def _hash_func_g_l4(self, img, img_tl, img_tr, img_bl, img_br):
+        hash_mat = self._hash_algo(img)
+        hash_mat_tl = self._hash_algo(img_tl)
+        hash_mat_tr = self._hash_algo(img_tr)
+        hash_mat_bl = self._hash_algo(img_bl)
+        hash_mat_br = self._hash_algo(img_br)
+
+        hash_mat = ''.join('%0.2x' % x for x in np.packbits(hash_mat))
+        hash_mat_tl = ''.join('%0.2x' % x for x in np.packbits(hash_mat_tl))
+        hash_mat_tr = ''.join('%0.2x' % x for x in np.packbits(hash_mat_tr))
+        hash_mat_bl = ''.join('%0.2x' % x for x in np.packbits(hash_mat_bl))
+        hash_mat_br = ''.join('%0.2x' % x for x in np.packbits(hash_mat_br))
+        res = hash_mat + hash_mat_tl + hash_mat_tr + hash_mat_bl + hash_mat_br
+
+        return res
 
     # search part
 

@@ -7,6 +7,8 @@ from imagededup.handlers.search.retrieval import get_cosine_similarity
 from imagededup.utils.general_utils import save_json, get_files_to_remove
 from imagededup.utils.image_utils import (
     load_image,
+    load_image_g_l2,
+    load_image_g_l4,
     preprocess_image,
     expand_image_array_cnn,
 )
@@ -68,7 +70,7 @@ class CNN:
             'GlobalAveragePooling'
         )
 
-    def _get_cnn_features_single(self, image_array: np.ndarray) -> np.ndarray:
+    def _get_cnn_features_single(self, img):
         """
         Generate CNN encodings for a single image.
 
@@ -78,9 +80,63 @@ class CNN:
         Returns:
             Encodings for the image in the form of numpy array.
         """
-        image_pp = self.preprocess_input(image_array)
-        image_pp = np.array(image_pp)[np.newaxis, :]
-        return self.model.predict(image_pp)
+        img = self.preprocess_input(img)
+        img = np.array(img)[np.newaxis, :]
+        res = self.model.predict(img)
+
+        return res
+
+    def _get_cnn_features_g_l2(self, img, img_t, img_b):
+        """
+        Generate CNN encodings for a single image.
+
+        Args:
+            image_array: Image typecast to numpy array.
+
+        Returns:
+            Encodings for the image in the form of numpy array.
+        """
+        img = self.preprocess_input(img)
+        img = np.array(img)[np.newaxis, :]
+        embedding = self.model.predict(img)
+        img_t = self.preprocess_input(img_t)
+        img_t = np.array(img_t)[np.newaxis, :]
+        embedding_t = self.model.predict(img_t)
+        img_b = self.preprocess_input(img_b)
+        img_b = np.array(img_b)[np.newaxis, :]
+        embedding_b = self.model.predict(img_b)
+        res = np.hstack((embedding,embedding_t,embedding_b))
+
+        return res
+
+    def _get_cnn_features_g_l4(self, img, img_tl, img_tr, img_bl, img_br):
+        """
+        Generate CNN encodings for a single image.
+
+        Args:
+            image_array: Image typecast to numpy array.
+
+        Returns:
+            Encodings for the image in the form of numpy array.
+        """
+        img = self.preprocess_input(img)
+        img = np.array(img)[np.newaxis, :]
+        embedding = self.model.predict(img)
+        img_tl = self.preprocess_input(img_tl)
+        img_tl = np.array(img_tl)[np.newaxis, :]
+        embedding_tl = self.model.predict(img_tl)
+        img_tr = self.preprocess_input(img_tr)
+        img_tr = np.array(img_tr)[np.newaxis, :]
+        embedding_tr = self.model.predict(img_tr)
+        img_bl = self.preprocess_input(img_bl)
+        img_bl = np.array(img_bl)[np.newaxis, :]
+        embedding_bl = self.model.predict(img_bl)
+        img_br = self.preprocess_input(img_br)
+        img_br = np.array(img_br)[np.newaxis, :]
+        embedding_br = self.model.predict(img_br)
+        res = np.hstack((embedding,embedding_tl,embedding_tr,embedding_bl,embedding_br))
+
+        return res
 
     def _get_cnn_features_batch(self, image_dir: PurePath) -> Dict[str, np.ndarray]:
         """
@@ -142,9 +198,9 @@ class CNN:
                     'Please provide either image file path or image array!'
                 )
 
-            image_pp = load_image(
-                image_file=image_file, target_size=self.target_size, grayscale=False
-            )
+            img = load_image(image_file=image_file, target_size=self.target_size, grayscale=False)
+            #img, img_t, img_b = load_image_g_l2(image_file=image_file, target_size=self.target_size, grayscale=False)
+            #img, img_tl, img_tr, img_bl, img_br = load_image_g_l4(image_file=image_file, target_size=self.target_size, grayscale=False)
 
         elif isinstance(image_array, np.ndarray):
             image_array = expand_image_array_cnn(
@@ -157,8 +213,10 @@ class CNN:
             raise ValueError('Please provide either image file path or image array!')
 
         return (
-            self._get_cnn_features_single(image_pp)
-            if isinstance(image_pp, np.ndarray)
+            self._get_cnn_features_single(img)
+            #self._get_cnn_features_g_l2(img, img_t, img_b)
+            #self._get_cnn_features_g_l4(img, img_tl, img_tr, img_bl, img_br)
+            if isinstance(img, np.ndarray)
             else None
         )
 
